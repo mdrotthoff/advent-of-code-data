@@ -235,6 +235,34 @@ def test_get_stats(pook):
     }
 
 
+fake_stats_response_2025 = """
+<article><p>These are your personal leaderboard times:</p>
+<pre>Day   <span class="leaderboard-daydesc-first">-Part 1-</span>
+            <span class="leaderboard-daydesc-both">-Part 2-</span>
+  2   00:05:42   -
+  1   00:06:31   00:31:28
+</pre>
+</article>
+"""
+
+
+def test_get_stats_2025(pook):
+    puzzle1 = Puzzle(year=2025, day=1)
+    puzzle2 = Puzzle(year=2025, day=2)
+    pook.get(
+        url="https://adventofcode.com/2025/leaderboard/self",
+        response_body=fake_stats_response_2025,
+        times=2,
+    )
+    assert puzzle1.my_stats == {
+        "a": {"time": timedelta(minutes=6, seconds=31)},
+        "b": {"time": timedelta(minutes=31, seconds=28)},
+    }
+    assert puzzle2.my_stats == {
+        "a": {"time": timedelta(minutes=5, seconds=42)},
+    }
+
+
 def test_get_stats_when_token_expired(pook):
     # sadly, it just returns the global leaderboard, rather than a http 4xx
     user = User("token12345678")
@@ -309,6 +337,30 @@ def test_easter_eggs(pook):
     [egg] = puzzle.easter_eggs
     assert egg.text == "interrupt"
     assert egg.attrs["title"] == "Later, on its turn, it sends you a sorcery."
+
+
+def test_easter_eggs_cache(pook):
+    pook.get(
+        url="https://adventofcode.com/2025/day/1",
+        response_body=(
+            "Advent of Code"
+            '<article class="day-desc">'
+            "<h2>--- Day 1: Secret Entrance ---</h2>"
+            "The first half of this puzzle is complete!"
+            "<p>Your puzzle answer was <code>answerA</code></p>"
+            '<p><em>password method <span title="You should have seen the chaos">'
+            "0x434C49434B</span></em></p>"
+        )
+    )
+    puzzle = Puzzle(2025, 1)
+    puzzle.prose0_path.parent.mkdir(parents=True, exist_ok=True)
+    puzzle.prose0_path.write_text("no egg")
+    assert not puzzle.prose1_path.exists()
+    [egg] = puzzle.easter_eggs
+    assert puzzle.prose1_path.exists()
+    assert not puzzle.prose2_path.exists()
+    assert egg.text == "0x434C49434B"
+    assert egg.attrs["title"] == "You should have seen the chaos"
 
 
 def test_get_stats_400(pook):
@@ -471,14 +523,14 @@ def test_unlock_time(pook):
 
 
 def test_all_puzzles(freezer):
-    freezer.move_to("2017-10-10")
+    freezer.move_to("2025-12-16")
     all_puzzles = list(Puzzle.all())
-    assert len(all_puzzles) == 50
+    assert len(all_puzzles) == 262
     first, *rest, last = all_puzzles
     assert first.year == 2015
     assert first.day == 1
-    assert last.year == 2016
-    assert last.day == 25
+    assert last.year == 2025
+    assert last.day == 12
 
 
 def test_submit_prevents_bad_guesses_too_high(freezer, capsys, pook):

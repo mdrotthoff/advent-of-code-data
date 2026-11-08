@@ -20,16 +20,16 @@ jobs:
         - macos-latest
         - windows-latest
         python-version:
-        - "3.9"
-        - "3.13"
+        - "3.10"
+        - "3.14"
         include:
-          - python-version: pypy-3.9
+          - python-version: pypy-3.11
             os: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -37,19 +37,19 @@ jobs:
         run: pip install -q -r tests/requirements.txt && pip freeze --all
 
       - name: Run tests for ${{ matrix.python-version }} on ${{ matrix.os }}
-        run: python -m pytest --durations=10
+        run: pytest --durations=10
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
 
   typesafety:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: pip
 
       - run: |
@@ -63,7 +63,7 @@ jobs:
 
       - run: echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
-      - uses: jakebailey/pyright-action@v2
+      - uses: jakebailey/pyright-action@v3
         with:
           ignore-external: true
           verify-types: aocd

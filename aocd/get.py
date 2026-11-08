@@ -67,9 +67,7 @@ def get_puzzle(
             raise
         q = block == "q"
         blocker(quiet=q, until=(year, day))
-        return puzzle
-    else:
-        return puzzle
+    return puzzle
 
 
 def most_recent_year() -> int:
@@ -96,7 +94,10 @@ def current_day() -> int:
     if aoc_now.month != 12:
         log.warning("current_day is only available in December (EST)")
         return 1
-    day = min(aoc_now.day, 25)
+    if aoc_now.year < 2025:
+        day = min(aoc_now.day, 25)
+    else:
+        day = min(aoc_now.day, 12)
     return day
 
 

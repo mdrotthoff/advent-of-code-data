@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "advent-of-code-data"
-version = "2.1.0"
+version = "2.2.0"
 description = "Get your puzzle data with a single import"
 readme = "README.md"
-requires-python = ">=3.9"
+license = "MIT"
+requires-python = ">=3.10"
 classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Topic :: Software Development :: Libraries",
     "Topic :: Games/Entertainment :: Puzzle Games",
 ]
@@ -20,15 +20,13 @@ dependencies = [
     "pebble",
     "urllib3",
     'tzdata ; platform_system == "Windows"',
-    "aocd-example-parser >= 2023.12.24",
+    "aocd-example-parser >= 2025.12.12",
+    'typing_extensions ; python_version < "3.11"',
 ]
 
 [[project.authors]]
 name = "Wim Jeantine-Glenn"
 email = "hey@wimglenn.com"
-
-[project.license]
-text = "MIT"
 
 [project.urls]
 Homepage = "https://github.com/wimglenn/advent-of-code-data"

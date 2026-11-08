@@ -64,6 +64,7 @@ class User:
     def from_id(cls, id: str) -> User:
         users = _load_users()
         if id not in users:
+            log.warning("The known user ids are:\n%s", "\n".join(f"- {u}" for u in users))
             raise UnknownUserError(f"User with id '{id}' is not known")
         user = cls(users[id])
         user._owner = id
@@ -149,18 +150,16 @@ class User:
                 vals = line.split()
                 day = int(vals[0])
                 k = f"{year}/{day:02d}"
-                results[k] = {}
-                results[k]["a"] = {
-                    "time": _parse_duration(vals[1]),
-                    "rank": int(vals[2]),
-                    "score": int(vals[3]),
-                }
-                if vals[4] != "-":
-                    results[k]["b"] = {
-                        "time": _parse_duration(vals[4]),
-                        "rank": int(vals[5]),
-                        "score": int(vals[6]),
-                    }
+                results[k] = {"a": {"time": _parse_duration(vals[1])}}
+                if year < 2025:
+                    results[k]["a"]["rank"] = int(vals[2])
+                    results[k]["a"]["score"] = int(vals[3])
+                    del vals[2:4]
+                if vals[2] != "-":
+                    results[k]["b"] = {"time": _parse_duration(vals[2])}
+                    if year < 2025:
+                        results[k]["b"]["rank"] = int(vals[3])
+                        results[k]["b"]["score"] = int(vals[4])
         return results
 
 
@@ -220,7 +219,7 @@ class Puzzle:
         # this is a property to make it clear that it's read-only
         return self._user
 
-    @property
+    @cached_property
     def input_data(self) -> str:
         """
         This puzzle's input data, specific to puzzle.user. It will usually be retrieved
@@ -532,17 +531,18 @@ class Puzzle:
                 part_b_url = self.url + "#part2"
                 log.info("reopening to %s", part_b_url)
                 webbrowser.open(part_b_url)
-            if not (self.day == 25 and part == "b"):
+            if not (self._is_final_day and part == "b"):
                 self._save_correct_answer(value=value, part=part)
-            if self.day == 25 and part == "a":
-                log.debug("checking if got 49 stars already for year %s...", self.year)
+            if self._is_final_day and part == "a":
+                max_stars = 50 if self.year < 2025 else 24
+                log.debug("checking if got %d stars already for year %s...", max_stars - 1, self.year)
                 my_stats = self.user.get_stats(self.year)
                 n_stars = sum(len(val) for val in my_stats.values())
-                if n_stars == 49:
-                    log.info("Got 49 stars already, getting 50th...")
+                if n_stars == max_stars - 1:
+                    log.info("Got %d stars already, getting %dth...", max_stars - 1, max_stars)
                     self._submit(value="done", part="b", reopen=reopen, quiet=quiet)
                 else:
-                    rem = 49 - n_stars
+                    rem = max_stars - 1 - n_stars
                     log.info("Got %d stars, need %d more for part b", n_stars, rem)
         elif "Did you already complete it" in message:
             color = "yellow"
@@ -567,6 +567,8 @@ class Puzzle:
                 log.info("Waiting %d seconds to autoretry", wait_time)
                 time.sleep(wait_time)
                 return self._submit(value=value, part=part, reopen=reopen, quiet=quiet)
+        elif self._is_final_day and part == "b" and "You've finished every puzzle " in message:
+            log.info("Final day congrats message: %s", message)
         else:
             log.warning("Unrecognised submit message %r", message)
         if not quiet:
@@ -633,7 +635,7 @@ class Puzzle:
         Note: Answers are only revealed after a correct submission. If you've
         not already solved the puzzle, PuzzleUnsolvedError will be raised.
         """
-        if part == "b" and self.day == 25:
+        if self._is_final_day and part == "b":
             return ""
         answer_path = getattr(self, f"answer_{part}_path")
         if answer_path.is_file():
@@ -718,7 +720,7 @@ class Puzzle:
                 _ensure_intermediate_dirs(self.prose2_path)
                 self.prose2_path.write_text(text, encoding="utf-8")
             hits = [p for p in soup.find_all("p") if p.text.startswith(hit)]
-            if self.day == 25:
+            if self._is_final_day:
                 [pa] = hits
                 self._save_correct_answer(pa.code.text, "a")
             else:
@@ -772,12 +774,12 @@ class Puzzle:
     def easter_eggs(self) -> list[str]:
         """
         Return a list of Easter eggs in the puzzle's description page. When you've
-        completed all 25 days, adventofcode.com will reveal the Easter eggs directly in
+        completed all days, adventofcode.com will reveal the Easter eggs directly in
         the html, but this property works even if all days haven't been completed yet.
         Most puzzles have exactly one Easter egg, but 2018-12-17 had two, so this
         property always returns a list for consistency.
         """
-        txt = self._get_prose()
+        txt = self._get_prose(force_precheck=True)
         soup = _get_soup(txt)
         eggs = soup.find_all(["span", "em", "code"], class_=None, attrs={"title": bool})
         return eggs
@@ -794,6 +796,12 @@ class Puzzle:
             result = result.astimezone(tz=localzone)
         return result
 
+    @property
+    def _is_final_day(self) -> bool:
+        if self.year >= 2025:
+            return self.day == 12
+        return self.day == 25
+
     @staticmethod
     def all(user: User | None = None) -> t.Iterator[Puzzle]:
         """
@@ -801,6 +809,8 @@ class Puzzle:
         """
         for year in count(2015):
             for day in range(1, 26):
+                if year >= 2025 and day > 12:
+                    break
                 puzzle = Puzzle(year, day, user)
                 if datetime.now(tz=AOC_TZ) < puzzle.unlock_time(local=False):
                     return
@@ -829,12 +839,7 @@ def _load_users():
 @cache
 def _load_example_parser(group="adventofcode.examples", name="reference"):
     # lazy-loads a plugin used to parse sample data, and cache it
-    try:
-        # Python 3.10+ - group/name selectable entry points
-        eps = entry_points().select(group=group, name=name)
-    except AttributeError:
-        # Python 3.9 - dict interface
-        eps = [ep for ep in entry_points()[group] if ep.name == name]
+    eps = entry_points().select(group=group, name=name)
     if not eps:
         msg = f"could not find the example parser plugin {group=}/{name=}"
         raise ExampleParserError(msg)
